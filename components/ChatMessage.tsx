@@ -2,6 +2,7 @@
 
 import React from "react";
 import type { ChatMessage as Msg } from "@/types/chat";
+import type { ChatMessage as ChatMessageType } from "@/types/chat";
 
 type Props = {
   message: Msg;
