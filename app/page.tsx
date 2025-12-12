@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { GoogleLogin, type CredentialResponse } from "@react-oauth/google";
 import { jwtDecode } from "jwt-decode";
-import { ChatKitPanel } from "@/components/ChatKitPanel";
+//import { ChatKitPanel } from "@/components/ChatKitPanel";
+import { ChatRenderer } from "@/components/ChatRenderer";
 import { useColorScheme } from "@/hooks/useColorScheme";
 
 type DecodedToken = {
