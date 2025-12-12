@@ -17,20 +17,20 @@ export async function POST(req: Request) {
 
     let messages: ChatMessage[] = [];
 
-    // ✅ Case 1: Full messages array
+    // ✅ Case 1: Full messages array (future-proof)
     if (Array.isArray(body.messages)) {
       messages = body.messages;
     }
 
-    // ✅ Case 2: Single input string
-    else if (typeof body.input === "string") {
-      messages = [{ role: "user", content: body.input }];
+    // ✅ Case 2: Single message string (CURRENT UI)
+    else if (typeof body.message === "string") {
+      messages = [{ role: "user", content: body.message }];
     }
 
     // ❌ Invalid payload
     else {
       return NextResponse.json(
-        { error: "Invalid payload: messages or input required" },
+        { error: "Invalid payload: message or messages required" },
         { status: 400 }
       );
     }
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({
-      conversationId: body.conversationId ?? null,
+      conversationId: body.conversationId ?? crypto.randomUUID(),
       answer: completion.choices[0]?.message?.content ?? "",
     });
   } catch (err) {
