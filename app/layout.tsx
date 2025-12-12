@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { GoogleOAuthProvider } from "@react-oauth/google";
-import { ChatKitScriptLoader } from "@/components/ChatKitScriptLoader";
+//import { ChatKitScriptLoader } from "@/components/ChatKitScriptLoader";
+import { ChatRenderer } from "@/components/ChatRenderer";
 
 const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
 
