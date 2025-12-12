@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const openai = new OpenAI({
+const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
 });
 
@@ -9,14 +9,20 @@ export async function POST(req: NextRequest) {
   try {
     const { conversationId, messages } = await req.json();
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages,
+    // Convert Chat-style messages → Responses API input
+    const input = messages.map((m: { role: string; content: string }) => ({
+      role: m.role,
+      content: [{ type: "text", text: m.content }],
+    }));
+
+    const response = await client.responses.create({
+      model: "gpt-4.1-mini", // recommended over gpt-4o for cost + speed
+      input,
     });
 
     return NextResponse.json({
       conversationId,
-      answer: completion.choices[0].message.content,
+      answer: response.output_text,
     });
   } catch (err) {
     console.error("Chat send error:", err);
