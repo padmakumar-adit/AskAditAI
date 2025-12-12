@@ -229,14 +229,14 @@ export default function HomePage() {
       </header>
 
       <div className="flex-1 p-4">
-        <ChatKitPanel
-          theme={scheme}
-          idToken={idToken}
-          onWidgetAction={async () => {}}
-          onResponseEnd={() => {}}
-          onThemeRequest={setScheme}
-        />
-      </div>
+       <ChatRenderer
+        email={email!}
+        displayName={displayName!}
+        avatarUrl={avatarUrl}
+        theme={scheme}
+       />
+     </div>
+
     </main>
   );
 }
