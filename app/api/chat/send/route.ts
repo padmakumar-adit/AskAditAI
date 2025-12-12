@@ -1,27 +1,60 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const client = new OpenAI({
+const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
 });
 
-export async function POST(req: NextRequest) {
+type IncomingMessage =
+  | { role: string; content: string }
+  | string;
+
+export async function POST(req: Request) {
   try {
-    const { conversationId, messages } = await req.json();
+    const body = await req.json();
+    console.log("Incoming body:", body);
 
-    // Convert Chat-style messages → Responses API input
-    const input = messages.map((m: { role: string; content: string }) => ({
-      role: m.role,
-      content: [{ type: "text", text: m.content }],
-    }));
+    let messages: { role: "system" | "user" | "assistant"; content: string }[] =
+      [];
 
-    const response = await client.responses.create({
-      model: "gpt-4.1-mini", // recommended over gpt-4o for cost + speed
-      input,
+    /**
+     * ✅ Case 1: Proper messages array
+     */
+    if (Array.isArray(body.messages)) {
+      messages = body.messages;
+    }
+
+    /**
+     * ✅ Case 2: Single input string
+     */
+    else if (typeof body.input === "string") {
+      messages = [
+        { role: "user", content: body.input },
+      ];
+    }
+
+    /**
+     * ❌ Invalid payload
+     */
+    else {
+      return NextResponse.json(
+        { error: "Invalid payload: messages or input required" },
+        { status: 400 }
+      );
+    }
+
+    console.log("Normalized messages:", messages);
+
+    const response = await openai.responses.create({
+      model: "gpt-4.1-mini",
+      input: messages.map((m) => ({
+        role: m.role,
+        content: [{ type: "text", text: m.content }],
+      })),
     });
 
     return NextResponse.json({
-      conversationId,
+      conversationId: body.conversationId ?? null,
       answer: response.output_text,
     });
   } catch (err) {
