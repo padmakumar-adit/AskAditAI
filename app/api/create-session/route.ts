@@ -1,23 +1,22 @@
 import { WORKFLOW_ID } from "@/lib/config";
 import { OAuth2Client } from "google-auth-library";
-import OpenAI from "openai";
 
 export const runtime = "nodejs";
 
-// Google OAuth client
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-
-// OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+const OPENAI_API_BASE = "https://api.openai.com";
 
 export async function POST(request: Request): Promise<Response> {
   try {
-    // ------------------ AUTH ------------------
+    // ---------- ENV CHECK ----------
+    if (!process.env.OPENAI_API_KEY) {
+      return json({ error: "Missing OPENAI_API_KEY" }, 500);
+    }
+
+    // ---------- AUTH ----------
     const authHeader = request.headers.get("authorization") || "";
-    const idToken = authHeader.toLowerCase().startsWith("bearer ")
-      ? authHeader.slice("bearer ".length).trim()
+    const idToken = authHeader.startsWith("Bearer ")
+      ? authHeader.slice(7)
       : null;
 
     if (!idToken) {
@@ -36,7 +35,7 @@ export async function POST(request: Request): Promise<Response> {
       return json({ error: "Email domain not allowed" }, 403);
     }
 
-    // ------------------ BODY ------------------
+    // ---------- BODY ----------
     const body = await request.json().catch(() => ({}));
     const workflowId =
       body?.workflow?.id ?? body?.workflowId ?? WORKFLOW_ID;
@@ -45,25 +44,36 @@ export async function POST(request: Request): Promise<Response> {
       return json({ error: "Missing workflow id" }, 400);
     }
 
-    // ------------------ CREATE SESSION (CORRECT WAY) ------------------
-    const response = await openai.responses.create({
-      model: "gpt-4.1-mini",
-      workflow: { id: workflowId },
-      user: email,
+    // ---------- CHATKIT SESSION (CORRECT) ----------
+    const res = await fetch(`${OPENAI_API_BASE}/v1/chatkit/sessions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "OpenAI-Beta": "chatkit_beta=v1",
+      },
+      body: JSON.stringify({
+        workflow: { id: workflowId },
+        user: email,
+      }),
     });
 
-    if (!response.client_secret) {
-      console.error("No client_secret returned", response);
-      return json({ error: "Failed to create session" }, 500);
+    const data = await res.json();
+
+    if (!res.ok || !data?.client_secret) {
+      console.error("ChatKit session error", data);
+      return json(
+        { error: "Failed to create ChatKit session", details: data },
+        res.status
+      );
     }
 
-    // ------------------ RETURN ------------------
     return json({
-      client_secret: response.client_secret,
-      expires_after: response.expires_after,
+      client_secret: data.client_secret,
+      expires_after: data.expires_after,
     });
   } catch (err) {
-    console.error("Create session error", err);
+    console.error("Create-session error", err);
     return json({ error: "Unexpected error" }, 500);
   }
 }
