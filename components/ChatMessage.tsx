@@ -1,22 +1,21 @@
 "use client";
 
 import React from "react";
-import type { ChatMessage as Msg } from "@/types/chat";
-import type { ChatMessage as ChatMessageType } from "@/types/chat";
 
 type Props = {
-  message: Msg;
+  role: "user" | "assistant";
+  content: string;
   onFeedback?: (value: "positive" | "negative") => void;
 };
 
-export function ChatMessage({ message, onFeedback }: Props) {
-  const isUser = message.role === "user";
+export function ChatMessage({ role, content, onFeedback }: Props) {
+  const isUser = role === "user";
 
   if (isUser) {
     return (
       <div className="flex justify-end">
         <div className="max-w-[70%] rounded-xl bg-slate-800 px-4 py-2 text-sm text-slate-100">
-          {message.content}
+          {content}
         </div>
       </div>
     );
@@ -25,11 +24,11 @@ export function ChatMessage({ message, onFeedback }: Props) {
   // Assistant message
   return (
     <div className="flex flex-col gap-2">
-      <div className="text-sm leading-relaxed text-slate-100 space-y-3">
-        {message.content}
+      <div className="space-y-3 text-sm leading-relaxed text-slate-100">
+        {content}
       </div>
 
-      {/* Feedback (always visible) */}
+      {/* Feedback */}
       <div className="flex items-center gap-3 text-slate-400">
         <button
           type="button"
