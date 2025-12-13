@@ -21,13 +21,14 @@ export type FactAction = {
 
 type ChatKitPanelProps = {
   theme: ColorScheme;
+  idToken?: string | null;
   onWidgetAction: (action: FactAction) => Promise<void>;
   onResponseEnd: () => void;
   onThemeRequest: (scheme: ColorScheme) => void;
-  idToken?: string | null;
 };
 
 type ErrorState = {
+  script: string | null;
   session: string | null;
   integration: string | null;
   retryable: boolean;
@@ -36,6 +37,7 @@ type ErrorState = {
 const isDev = process.env.NODE_ENV !== "production";
 
 const createInitialErrors = (): ErrorState => ({
+  script: null,
   session: null,
   integration: null,
   retryable: false,
@@ -43,15 +45,15 @@ const createInitialErrors = (): ErrorState => ({
 
 export function ChatKitPanel({
   theme,
+  idToken,
   onWidgetAction,
   onResponseEnd,
   onThemeRequest,
-  idToken,
 }: ChatKitPanelProps) {
   const processedFacts = useRef(new Set<string>());
   const isMountedRef = useRef(true);
 
-  const [errors, setErrors] = useState<ErrorState>(() => createInitialErrors());
+  const [errors, setErrors] = useState<ErrorState>(createInitialErrors);
   const [isInitializingSession, setIsInitializingSession] = useState(true);
   const [instanceKey, setInstanceKey] = useState(0);
 
@@ -65,19 +67,32 @@ export function ChatKitPanel({
     };
   }, []);
 
+  const isWorkflowConfigured =
+    Boolean(WORKFLOW_ID) && !WORKFLOW_ID.startsWith("wf_replace");
+
+  useEffect(() => {
+    if (!isWorkflowConfigured) {
+      setErrorState({
+        session: "Workflow ID is not configured.",
+        retryable: false,
+      });
+      setIsInitializingSession(false);
+    }
+  }, [isWorkflowConfigured, setErrorState]);
+
   const handleResetChat = useCallback(() => {
-    if (isDev) console.info("[ChatKitPanel] Restarting session");
+    if (isDev) {
+      console.info("[ChatKitPanel] Restarting chat session");
+    }
 
     processedFacts.current.clear();
     setErrors(createInitialErrors());
     setIsInitializingSession(true);
-
-    // 🔑 Force ChatKit to remount
     setInstanceKey((k) => k + 1);
   }, []);
 
   const getClientSecret = useCallback(async () => {
-    if (!WORKFLOW_ID) {
+    if (!isWorkflowConfigured) {
       throw new Error("Workflow not configured");
     }
 
@@ -87,11 +102,12 @@ export function ChatKitPanel({
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
+
     if (idToken) {
       headers.Authorization = `Bearer ${idToken}`;
     }
 
-    const res = await fetch(CREATE_SESSION_ENDPOINT, {
+    const response = await fetch(CREATE_SESSION_ENDPOINT, {
       method: "POST",
       headers,
       body: JSON.stringify({
@@ -102,15 +118,17 @@ export function ChatKitPanel({
       }),
     });
 
-    const json = await res.json();
+    const data = (await response.json().catch(() => null)) as
+      | { client_secret?: string }
+      | null;
 
-    if (!res.ok || !json?.client_secret) {
+    if (!response.ok || !data?.client_secret) {
       throw new Error("Failed to create ChatKit session");
     }
 
     setIsInitializingSession(false);
-    return json.client_secret;
-  }, [idToken, setErrorState]);
+    return data.client_secret;
+  }, [idToken, isWorkflowConfigured, setErrorState]);
 
   const chatkit = useChatKit({
     api: { getClientSecret },
@@ -141,13 +159,16 @@ export function ChatKitPanel({
       if (invocation.name === "record_fact") {
         const id = String(invocation.params?.fact_id ?? "");
         const text = String(invocation.params?.fact_text ?? "");
-        if (!id || processedFacts.current.has(id)) return { success: true };
+
+        if (!id || processedFacts.current.has(id)) {
+          return { success: true };
+        }
 
         processedFacts.current.add(id);
         void onWidgetAction({
           type: "save",
           factId: id,
-          factText: text.trim(),
+          factText: text.replace(/\s+/g, " ").trim(),
         });
         return { success: true };
       }
@@ -165,7 +186,7 @@ export function ChatKitPanel({
 
       setErrorState({
         integration:
-          "Your session expired or encountered an error. Please restart the chat.",
+          "Your session has expired or encountered an error. Please restart the chat.",
         retryable: true,
       });
 
@@ -173,12 +194,13 @@ export function ChatKitPanel({
     },
   });
 
-  const blockingError = errors.session ?? errors.integration;
+  const blockingError =
+    errors.script ?? errors.session ?? errors.integration;
 
   return (
-    <div className="relative flex h-[90vh] w-full flex-col overflow-hidden rounded-2xl bg-white dark:bg-slate-900">
+    <div className="relative flex h-[90vh] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-slate-900">
       <ChatKit
-        key={instanceKey}   {/* ✅ KEY GOES HERE */}
+        key={instanceKey}
         control={chatkit.control}
         className={
           blockingError || isInitializingSession
