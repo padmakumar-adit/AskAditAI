@@ -2,34 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ChatMessage } from "./ChatMessage";
-import type { ChatMessage as Msg } from "@/types/chat";
+import { useChatKit } from "@openai/chatkit-react";
 import type { ColorScheme } from "@/hooks/useColorScheme";
 
 type Props = {
-  email: string;
-  displayName: string;
-  avatarUrl?: string | null;
   theme: ColorScheme;
 };
 
-export function ChatRenderer({ email }: Props) {
-  const [conversationId, setConversationId] = useState<string>("");
-  const [messages, setMessages] = useState<Msg[]>([]);
+export function ChatRenderer({ theme }: Props) {
+  const { control, messages, isResponding } = useChatKit();
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Start / resume conversation
-  useEffect(() => {
-    fetch("/api/chat/start", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
-    })
-      .then((r) => r.json())
-      .then((d) => setConversationId(d.conversationId));
-  }, [email]);
-
-  // Auto-scroll
+  // Auto-scroll on new messages
   useEffect(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
@@ -37,73 +22,10 @@ export function ChatRenderer({ email }: Props) {
     });
   }, [messages]);
 
-  const sendMessage = async () => {
-    if (!input.trim() || !conversationId) return;
-
-    const userMsg: Msg = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: input,
-      createdAt: Date.now(),
-    };
-
-    setMessages((m) => [...m, userMsg]);
+  const sendMessage = () => {
+    if (!input.trim() || !control) return;
+    control.sendMessage(input);
     setInput("");
-
-    const res = await fetch("/api/chat/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        conversationId,
-        message: userMsg.content,
-      }),
-    });
-
-    const reader = res.body?.getReader();
-    if (!reader) return;
-
-    let assistantText = "";
-    const assistantId = crypto.randomUUID();
-
-    setMessages((m) => [
-      ...m,
-      {
-        id: assistantId,
-        role: "assistant",
-        content: "",
-        createdAt: Date.now(),
-      },
-    ]);
-
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-
-      assistantText += new TextDecoder().decode(value);
-
-      setMessages((m) =>
-        m.map((msg) =>
-          msg.id === assistantId
-            ? { ...msg, content: assistantText }
-            : msg
-        )
-      );
-    }
-  };
-
-  const sendFeedback = async (
-    messageId: string,
-    value: "positive" | "negative"
-  ) => {
-    await fetch("/api/chat/feedback", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        conversationId,
-        messageId,
-        feedback: value,
-      }),
-    });
   };
 
   return (
@@ -116,14 +38,14 @@ export function ChatRenderer({ email }: Props) {
         {messages.map((m) => (
           <ChatMessage
             key={m.id}
-            message={m}
-            onFeedback={
-              m.role === "assistant"
-                ? (value) => sendFeedback(m.id, value)
-                : undefined
-            }
+            role={m.role}
+            content={m.content}
           />
         ))}
+
+        {isResponding && (
+          <div className="text-xs text-slate-400">Thinking…</div>
+        )}
       </div>
 
       {/* Input */}
